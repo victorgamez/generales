@@ -1,0 +1,11 @@
+#!/usr/bin/python
+
+USERS='javiprmes@sama.static.plocan,victorgarcia@sama.static.plocan,taniamorales@sama.static.plocan'
+import sys,mylib
+
+#USERS='javiprmes@sama.static.plocan'
+message=sys.argv[1]
+#print "[[envia_jabber]] ",message
+command_exec="xsend.py "+USERS+" \""+message+"\""
+# print "[[envia_jabber]] Voy a ejecutar ",command_exec
+mylib.executa(command_exec)
