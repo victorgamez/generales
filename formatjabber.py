@@ -20,7 +20,8 @@ class formatjabber(object):
 	def ComposeMessage(self,message):
 		# Kind of : [[ DATE ]] HOST: name: message 
 		self.SetCurrentDate()
-		Message = self.LeftBracket*2 + self.now + self.RightBracket*2 + " MESSAGE FROM HOST:" + self.hostname + " :: " + message
+		#Message = self.LeftBracket*2 + self.now + self.RightBracket*2 + " MESSAGE FROM HOST:" + self.hostname + " :: " + message
+		Message = """%s %s - %s - User: %s %s MESSAGE :: %s """ % (self.LeftBracket*2, self.now, self.hostname, self.username, self.RightBracket*2, message)
 		return Message
 
 	def SetRecipients(self,Recipients):
