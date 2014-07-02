@@ -15,7 +15,7 @@ class formatjabber(object):
 	######### SendMessage ##########
 	## Formats the string to be sent
 	################################ 
-	def __ComposeMessage(self,message):
+	def ComposeMessage(self,message):
 		# Kind of : [[ DATE ]] HOST: name: message 
 		self.SetCurrentDate()
 		Message = self.LeftBracket*2 + self.now + self.RightBracket*2 + " MESSAGE FROM HOST:" + self.hostname + " :: " + message
@@ -31,11 +31,15 @@ class formatjabber(object):
 		 return self.now
 		
 	def SendJabberMsg(self,Message):
-		 FrmtdMessage= self.__ComposeMessage(Message)
+		 FrmtdMessage= self.ComposeMessage(Message)
 		 command_exec="/mnt/bin/envia_jabber2.0 "+ self.Recipients + " " + "\""+FrmtdMessage+"\""
 		 mylib.executa(command_exec)
 
-#if __name__ == '__main__':
+if __name__ == '__main__':
+	if len(sys.argv)>1:
+		print formatjabber().ComposeMessage(str(sys.argv[1]))
+		
+		
 #	Fjabb=formatjabber()
 #	Fjabb.SetRecipients("javiprmes")
 #	Fjabb.SendJabberMsg("Probando")
