@@ -4,12 +4,14 @@ from datetime import datetime, date, time
 sys.path.append('/mnt/bin/')
 import mylib
 import socket
+import getpass
 
 ######## Class formatjabber ############
 ########################################
 class formatjabber(object):
 	def __init__(self):
 		self.hostname=socket.gethostname()
+		self.username=getpass.getuser()
 		self.LeftBracket='['
 		self.RightBracket=']'
 	######### SendMessage ##########
