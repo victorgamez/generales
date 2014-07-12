@@ -1,0 +1,22 @@
+#!/usr/bin/python
+
+import sys,mylib
+import argparse
+
+## Init vars
+server='sama.static.plocan'
+
+
+## Init command line arguments
+parser= argparse.ArgumentParser(description='Send jabber message')
+parser.add_argument('recipients',help='Jabber users recipients')
+parser.add_argument('message', help='Message to be sent') 
+args=parser.parse_args()
+
+
+## Add '@server' to each recipient
+USERS=mylib.executa("echo "+args.recipients+" | sed -e 's/[^,]*/&@"+server+"/gi'")
+USERS=','.join(USERS)
+command_exec="xsend.py "+USERS+" \""+args.message+"\""
+#print "[[envia_jabber]] Voy a ejecutar "+command_exec
+mylib.executa(command_exec)
