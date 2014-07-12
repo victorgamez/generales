@@ -15,9 +15,8 @@ args=parser.parse_args()
 
 
 ## Add '@server' to each recipient
-#USERS=mylib.executa("echo "+sys.argv[2]+" | sed -e 's/[^,]*/&@sama.static.plocan/gi'")
 USERS=mylib.executa("echo "+args.recipients+" | sed -e 's/[^,]*/&@"+server+"/gi'")
 USERS=','.join(USERS)
 command_exec="xsend.py "+USERS+" \""+args.message+"\""
-print "[[envia_jabber]] Voy a ejecutar "+command_exec
+#print "[[envia_jabber]] Voy a ejecutar "+command_exec
 mylib.executa(command_exec)
