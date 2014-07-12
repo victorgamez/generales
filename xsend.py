@@ -13,7 +13,9 @@ text=sys.argv[-1]
 jidparams={}
 if os.access(os.environ['HOME']+'/.xsend',os.R_OK):
     for ln in open(os.environ['HOME']+'/.xsend').readlines():
+        # Ignore comments inside $HOME/.xsend file
         if not ln[0] in ('#',';'):
+            # Read values, inserting them into a dictionary
             key,val=ln.strip().split('=',1)
             jidparams[key.lower()]=val
 for mandatory in ['jid','password']:
@@ -42,6 +44,6 @@ for recipient in tojid.split(','):
 	print 'sent message to ',recipient,'with id',id
 	#print "Enviando a ",recipient," el mensaje ",text
 
-time.sleep(1)   # some older servers will not send the message if you disconnect immediately after sending
+time.sleep(1)  
 
-#cl.disconnect()
+
