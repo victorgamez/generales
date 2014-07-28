@@ -1,0 +1,466 @@
+#!/usr/bin/python2.6
+##################### estoc_gmail ##############################
+# This awesome script check an email account from a specific   #
+# sender, extract the attachments and send them to a server    #
+# through a sftp connection                                    #
+# @author: Javier Perez Messeri <javier.perez@plocan.eu>       #
+# VERSION HISTORY:					       #
+# *  1.1 140604: ADDED COPYFILE FUNCTION TO COPY FILES TO LOCAL#					
+################################################################
+
+#import paramiko
+import sys,time,datetime,shutil
+from time import strftime
+#########################################
+######## sftp_to(local,remote) ##########
+#########################################
+def sftp_to(local,remote):
+	import warnings
+	with warnings.catch_warnings():
+		warnings.simplefilter("ignore")
+		import paramiko
+	# Set private key path
+ 	privkey = paramiko.RSAKey.from_private_key_file (private_key_file)
+	
+	# Array with filenames and result of the sftp operation
+	files_results=[]
+	# Open transport object to connect
+	try:
+		_info("SSH: Conectando a "+remote_host)
+		transport = paramiko.Transport((remote_host,22))
+		#transport=paramiko.SSHClient()
+		
+		_info("SSH: Login")
+		transport.connect(username=user_ssh,pkey=privkey)
+		
+		# Create a sftp connection
+		_info("SSH: Estableciendo comunicacion")
+		my_sftp= paramiko.SFTPClient.from_transport(transport)
+		
+		# Upload file
+		for each_file in local:
+			# Set upload path with current file
+			upload_path_complete=remote+each_file[1]
+
+			# Set temporary local path with file
+			temp_path_complete=each_file[0]+each_file[1]
+
+			# Upload file
+			_info("Subiendo "+temp_path_complete+" a "+upload_path_complete)
+			try:
+				my_sftp.put(temp_path_complete,upload_path_complete)
+		#		if 'CID' in upload_path_complete :
+					# Convert from /home/.../CID/.../number_....csv to /home/.../number.csv
+		#			Path=upload_path_complete[0:upload_path_complete.rfind('/')]
+		#			TheFile=upload_path_complete[upload_path_complete.rfind('/'):]
+		#			TheFile=Path+TheFile[:TheFile.find('_')]+'.csv'
+					#print TheFile
+		#			my_sftp.remove(TheFile)
+		#			my_sftp.rename(upload_path_complete,TheFile)
+				files_results.append([each_file[1],"CORRECTO"])
+			except Exception as Except:
+				#_error("SSH: Error al subir el fichero:"+sys.exc_info()[0])
+				_error("SSH: Error al subir el fichero:"+str(Except))
+				files_results.append([each_file[1],"NO PUDO SER SUBIDO"])
+	
+	except:
+		error_msg="SSH: Error :",sys.exc_info()[0]
+		_error(error_msg)
+		# Return a list with 1 element
+		return ["Error en la conexion:",error_msg]
+	# Close connection
+	my_sftp.close()
+	transport.close()
+
+	return files_results
+
+#########################################
+#            get_sender(header)         #
+#########################################
+def get_sender(header):
+	import imaplib,email
+        from email.parser import HeaderParser
+
+	# Get headers	
+	headers = HeaderParser().parsestr(header)
+	org = headers['From']
+
+	# Split sender email and address from sender
+	name_sender_email,sender_email=email.Utils.parseaddr(org)
+	return sender_email
+
+#########################################
+#      get_header(imap_connection)      #
+#########################################
+def get_header(imap_connection):
+	data_from_header = imap_connection.fetch(1, '(BODY[HEADER])')
+        return data_from_header[1][0][1]
+
+#########################################
+#   write_file(path_and_file,data)      #
+#########################################
+def write_file(path_and_file,data):
+	#print "!!!Escribiendo en ",path_and_file
+	f=open(path_and_file,'w')
+        f.write(data)
+        f.close()
+
+def _show_message(header,message):
+	print "[",header,datetime.datetime.now(),"] ",message
+
+def _warning(message):
+	_show_message("WARNING",message)
+
+def _error(message):
+	_show_message("[ERROR]",message)
+
+def _info(message):
+	_show_message("INFORMACION",message)
+
+# ##############################################################
+# FUNCTION check_mail_get__file(sender_filter,only_new_mail)   #   
+# ###				                               #
+# Check mail and split attachments from body                   #
+# * Parameters: 				               #
+#      sender_filter: check e-mail from this sender            #
+#      only_new_mail: check only new e-mail                    # 
+# * Return: - false when connection fails                      #
+#           - true if connection is ok but no new e-mail from  #
+#         "sender_filter"				       #
+#           - Array with filenames if correct as expected      #
+# ##############################################################
+def check_mail_get_file(sender_filter,only_new_mail):
+        import imaplib,re,email,os
+	imaplib.IMAP4.debug = imaplib.IMAP4_SSL.debug = 1
+	# Array with paths and file names
+	List_Of_Files=[]
+	no_messages=0
+	#Filename=[("-1","Error")]
+	filename= False
+	try:
+		# Connection to SMTP server (SSL)
+			
+		i=imaplib.IMAP4_SSL(smtp_server_remote)
+	except Exception as e:
+		_error("Error conectando a "+smtp_server_remote+":"+str(e))
+
+	# Login
+	try:
+		_info("[CHECK EMAIL] Login...")
+
+		# Login and password
+        	i.login(account_username,account_password)
+
+		# Select
+		i.select()
+	except:
+		_error("Error iniciando sesion con usuario "+account_username+" y clave "+account_password)
+		return False
+	# Get mail
+	_info ("[CHECK EMAIL] Comprobando correo...")
+	
+	# Check all mail(UNSEEN) or only new mail(SEEN)
+	typ,data=i.search(None,'(UNSEEN)' if only_new_mail==1 else '(SEEN)') #UNSEEN
+	#c=0
+#	filename=True
+	pos=0	
+	if (not data[0]): 
+		_warning("No hay mensajes nuevos")
+		no_messages=1
+	else:
+	# Iterate messages
+		for num in data[0].split():
+			# Get message data and type
+			typ,data=i.fetch(num, '(RFC822)')
+
+			# Get header
+			header_data = get_header(i)
+			#c+=1
+			# Get body
+			text=data[0][1]
+
+			# Split message
+			msg=email.message_from_string(text)
+
+			# Obtain sender
+			sender_email=get_sender(header_data)
+
+			# Check if it is our sender
+			if sender_email.find(sender_filter) != -1:
+				_info("EUREKA,correo de "+sender_email)
+			else:
+				_warning("No hay correo nuevo de "+sender_email)
+				break
+
+			# Search for attachment
+			for part in msg.walk():
+				if part.get_content_maintype() == 'multipart':
+					#print "Habemus fichero"
+					continue
+				if part.get('Content-Disposition') is None:
+					#print "Content-disposition OK"
+					continue
+
+				# Get filename
+				filename=part.get_filename()
+
+				# Remove white spaces
+				filename=filename.strip() 
+			
+				# Getting filename content
+				data=part.get_payload(decode=True)
+				if not data:
+					continue
+				try:
+					# Write to a temp file
+					_info("Escribiendo "+tmp_path+filename)
+					write_file(tmp_path+filename,data)
+				
+					# Add to List
+					List_Of_Files.append([tmp_path,filename])
+				except:
+					_error("Error guardando fichero "+filename+" en "+tmp_path)
+		
+
+		i.close()
+		i.logout()
+	
+	# If no messages, return true
+	if no_messages== 1:
+		return True
+
+	# If no attachments, return false
+	if filename == "False":
+		_warning("Falso")
+		return False
+	
+	# Return files attached
+	return List_Of_Files
+
+#########################################
+#           create_dir(newdir)          #
+#########################################
+def create_dir(newdir):
+	import os
+	# If newdir already exists
+	if os.path.isdir(newdir):
+        	try:	
+			print "El directorio ",newdir," ya existe.Se procede a eliminarlo."
+			# Remove dir
+			os.rmdir(newdir)
+
+		except:
+			# Dir is not empty and I cannot remove it. Ignore error...
+			print "No puedo borrar el directorio ",newdir, " porque no esta vacio"
+			pass
+	# If newdir doesn't exists, create it...
+	try:
+			# Create dir
+			os.mkdir(newdir)
+
+			# Chmod 777
+			os.chmod(newdir,0777)
+	except:
+		print "Error creando directorio ",newdir
+		pass
+
+#########################################
+##  remove_dir(remdir,files_to_delete)###
+#########################################
+def remove_dir(remdir,files_to_delete):
+	import os
+	# If path is a directory...
+	if os.path.isdir(remdir):
+		try:
+			# Change to that directory
+			os.chdir(remdir)
+		except:
+			# Exception: cannot access to dir
+			print "No puedo acceder a ",remdir,":",sys.exc_info()[0]
+		# For each file, remove it
+		for each_file in files_to_delete:
+			try:
+				print "Eliminando ",each_file[1]
+				os.remove(each_file[1])
+			except:	
+				# Excepcion: file cannot be removed
+				print "Error borrando ",each_file[1]
+		# Remove dir
+		try:
+			os.rmdir(remdir)
+		except:
+			# Exception: directory couldn't be removed
+			print "No se pudo borrar el directorio ",remdir
+	else:
+		print remdir," no es un directorio, o no existe"
+
+
+#def generate_repot(files):
+#########################################
+##  CopyFiles(Files_to_copy)###
+#########################################
+def CopyFiles(Files_To_Copy):
+	# For each file to local_path
+	for OneFile in Files_To_Copy:
+		Path_Complete=''.join(OneFile)
+		print "Copiando ",Path_Complete," en "+local_path
+		shutil.copy2(Path_Complete, local_path)
+
+#########################################
+########       _proceed        ##########
+#########################################
+def _proceed():
+	### TESTTT ===> ###
+	#send_email(local_sender,to,"PROBANDO PROBANDO","Yeeah","192.168.35.215")
+	## <==
+	global remote_host
+	global remote_host_siboy
+	global user_ssh,user_ssh_siboy
+
+	files=check_mail_get_file(sender,only_new_mail)
+	if (files != False and files != True):
+#		print "SFTP & REMOVE"
+		subject='Informe envio datos boya ESTOC'
+		# V1.1 COPY TO LOCALPATH
+		CopyFiles(files)
+		# SFTP IT and email it!
+		result=sftp_to(files,upload_path)
+		# Remove files
+		remove_dir(tmp_path,files)
+	else:
+		if files == False:
+			_error("No se pudo completar la operacion con exito")
+		#myemail_send(sender,to,subject,")
+
+
+def usage():
+	_show_message("USO","estoc_gmail [--all-email]")
+
+def check_parameters(argv):
+	import optparse
+	global only_new_mail,debug
+	parser= optparse.OptionParser(usage="usage: %prog [options]")
+	parser.add_option("-a","--all-email",action="store_true",dest="_only_new_email",default="",help="Comprobar todos los e-mails");
+	parser.add_option("-d","--debug",action="store_true",dest="_debug",default="",help="Modo depuracion");
+	(options,args)=parser.parse_args()
+	only_new_mail= not (options._only_new_email)
+	debug=options._debug
+	#only_new_mail=0 if options._only_new_email else 1
+
+def myemail_send(sender,receiver,subject,result):
+	from string import Template
+	
+	result_final=""
+	for cadafich in result:
+		result_final=result_final+"""
+		%s  -> %s\n
+		""" % (cadafich[0],cadafich[1])
+
+	body_message=Template("""\
+	**** POR FAVOR, NO RESPONDA ESTE MENSAJE ****
+	Estimados usuarios,
+
+        Se informa de que el envio de los datos de la boya Estoc del dia $date es el siguiente:
+
+	$result
+
+	Saludos
+        """)
+	
+	composition_body={"date":today,
+			  "result":result_final}
+
+	#print body_message.substitute(composition_body)
+        #send_email(sender,receiver,subject, body_message,smtp_server)
+	send_email(sender,receiver,subject, body_message.substitute(composition_body),smtp_server)
+
+def send_email(sender,receiver,subject,message,smtp):
+	from string import Template
+	from email.mime.text import MIMEText
+	import smtplib
+
+	message_template=MIMEText(message)
+	message_template['From']=sender
+	message_template['To']=receiver
+	message_template['Subject']=subject
+
+	final_message=message_template.as_string()
+	print final_message
+	try:
+		smtpObj = smtplib.SMTP(smtp)
+		smtpObj.sendmail(sender,receiver.split(","),final_message)
+		_info("[EMAIL] Enviado")
+	except Exception:
+		_warning("No se pudo enviar el email a "+receiver)
+		print "ERROR:",sys.exc_info()[0]
+
+
+################# MAIN VARIABLES ##########################
+
+# Define localhost
+local_host='193.146.91.71'
+
+# Define smtp server
+smtp_server='192.168.35.215'
+# Define remote smtp server
+smtp_server_remote='imap.gmail.com'
+#smtp_server_remote='193.146.89.215'
+# Define user account and password
+account_username='estoc@plocan.eu'
+account_password='plocan2011'
+
+#account_username='javi@internal.plocan.eu'
+#account_password='javi'
+# Define remote host
+remote_host='data.plocan.eu'
+#remote_host_siboy='192.168.35.64'
+
+# Define temp path
+tmp_path='/tmp/_upload/'
+
+# Define upload path
+upload_path='/mnt/data/Estoc/csv/'
+#upload_path_siboy='/home/tania/CIDSIBOY_V1/CID/FicherosRAW/ARGOS/'
+# Local path in current computer
+local_path=upload_path
+# Define remote host user
+user_ssh='dulce'
+#user_ssh_siboy='wmaster'
+
+# Define private key file
+private_key_file='/home/wmaster/.ssh/id_rsa'
+
+# Define sender we want to check
+sender='argosdirect@cls.fr'
+#sender='xxx@internal.plocan.eu'
+
+# Define local sender for internal emails
+local_sender='noreply@internal.plocan.eu'
+to='rayco.moran@plocan.eu,logs@internal.plocan.eu'
+
+# Today
+# today=datetime.date.today()
+today=strftime("%Y-%m-%d %H:%M:%S")
+
+
+# Define if we want to check also seen mail (usually 1)
+only_new_mail=1
+
+################################ MAIN ################################
+def main(argv):
+# 	def myemail_send(sender,receiver,subject,body,result):
+#	myemail_send('noreply@plocan.eu','javier.perez@plocan.eu','Prueba','Muy bien','OK')
+#	sys.exit()
+
+	# Check parameters command line
+	check_parameters(argv)
+
+	# Create temporary path
+	create_dir(tmp_path)
+
+	# Proceed to check mail
+	_proceed()
+	print "FIN"
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
